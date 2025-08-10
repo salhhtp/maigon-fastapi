@@ -1,23 +1,29 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
-from common.supa import download_file, patch_request
-import json
+from common.supa import patch_request
+from common.auth import verify_sig
+import requests, os
 
 app = FastAPI()
 
 class ReviewReq(BaseModel):
     request_id: str
-    file_path: str
+    signed_url: str
+    service_code: str
 
-def analyze_contract(raw_bytes: bytes) -> dict:
-    # TODO: replace with your real model call (SpaCy/HF/etc.)
-    text = raw_bytes[:2000].decode(errors="ignore")
-    return {"summary": "OK", "sample": text[:200]}
+def analyze_contract(raw: bytes) -> dict:
+    # TODO: plug your real model; return unified schema
+    return {
+      "serviceCode": "dpa", "overallRisk": 12,
+      "findings": [], "metadata": {"length": len(raw)}
+    }
 
 @app.post("/review")
-def review(payload: ReviewReq):
-    patch_request(payload.request_id, {"status":"running"})
-    data = download_file(payload.file_path)
+def review(p: ReviewReq, x_signature: str = Header(...)):
+    if not verify_sig(p.signed_url, x_signature):
+        raise HTTPException(status_code=403, detail="bad signature")
+    patch_request(p.request_id, {"status":"running"})
+    data = requests.get(p.signed_url).content
     result = analyze_contract(data)
-    patch_request(payload.request_id, {"status":"done", "result_json": result})
+    patch_request(p.request_id, {"status":"done", "result_json": result})
     return {"ok": True}
