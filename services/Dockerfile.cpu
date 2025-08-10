@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY common /app/common
+COPY services /app/services
+RUN pip install --no-cache-dir fastapi uvicorn gunicorn requests
+ENV PYTHONPATH=/app
+CMD ["bash","-lc","gunicorn -k uvicorn.workers.UvicornWorker services.dpa.app:app --bind 0.0.0.0:80"]

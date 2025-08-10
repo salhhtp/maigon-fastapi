@@ -1,0 +1,33 @@
+name: Build & Deploy Cloud Run (GPU)
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'service code (dpa/nda/eula/msa/supply/employment/privacy)'
+        required: true
+        default: 'dpa'
+      dockerfile:
+        description: 'Dockerfile path'
+        required: true
+        default: 'services/Dockerfile.gpu'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+      - name: Build
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          DOCKERFILE=${{ github.event.inputs.dockerfile }}
+          gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT }}/${SERVICE}:$GITHUB_SHA -f ${DOCKERFILE}
+      - name: Deploy
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          gcloud run deploy ${SERVICE}-review \
+            --image gcr.io/${{ secrets.GCP_PROJECT }}/${SERVICE}:$GITHUB_SHA \
+            --region europe-west4 --platform managed \
+            --cpu=8 --memory=16Gi --gpu=1 --allow-unauthenticated
